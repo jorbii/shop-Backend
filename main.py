@@ -11,8 +11,9 @@ from routers import (
     payments,
     admin
 )
+from db.database import Base, engine
 
-# Створюємо екземпляр додатку
+Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="My E-commerce API",
     description="API магазинчику на імітації DB",
@@ -39,35 +40,35 @@ app.include_router(
     prefix="/products",
     tags=["Products"]
 )
-
-# 3. Categories
-app.include_router(
-    categories.router,
-    prefix="/categories",
-    tags=["Categories"]
-)
-
-# 4. Cart
-app.include_router(
-    cart.router,
-    prefix="/cart",
-    tags=["Cart"]
-)
+#
+# # 3. Categories
+# app.include_router(
+#     categories.router,
+#     prefix="/categories",
+#     tags=["Categories"]
+# )
+#
+# # 4. Cart
+# app.include_router(
+#     cart.router,
+#     prefix="/cart",
+#     tags=["Cart"]
+# )
 
 # 5. Orders
-app.include_router(
-    orders.router,
-    prefix="/orders",
-    tags=["Orders"]
-)
+# app.include_router(
+#     orders.router,
+#     prefix="/orders",
+#     tags=["Orders"]
+# )
 
 # 6. Payments
-app.include_router(
-    payments.router,
-    prefix="/payments",
-    tags=["Payments"]
-)
-
+# app.include_router(
+#     payments.router,
+#     prefix="/payments",
+#     tags=["Payments"]
+# )
+#
 # 7. Admin (окремі адмінські штуки)
 app.include_router(
     admin.router,

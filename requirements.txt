@@ -5,3 +5,4 @@ SQLAlchemy~=2.0.45
 python-jose~=3.5.0
 passlib~=1.7.4
 streamlit~=1.52.1
+pydantic~=2.12.5
