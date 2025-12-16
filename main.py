@@ -1,6 +1,9 @@
 import uvicorn
 from fastapi import FastAPI
 
+from fastapi.middleware.cors import CORSMiddleware
+from core import constants
+
 from routers import (
     auth,
     users,
@@ -63,12 +66,12 @@ app.include_router(
 # )
 
 # 6. Payments
-# app.include_router(
-#     payments.router,
-#     prefix="/payments",
-#     tags=["Payments"]
-# )
-#
+app.include_router(
+    payments.router,
+    prefix="/payments",
+    tags=["Payments"]
+)
+
 # 7. Admin (окремі адмінські штуки)
 app.include_router(
     admin.router,
@@ -76,12 +79,28 @@ app.include_router(
     tags=["Admin"]
 )
 
+# 8. Constant
+
+app.include_router(
+    constants.router,
+    prefix="/constant",
+    tags=["constants"]
+)
+
+
 
 # Простий рут для перевірки, чи сервер живий
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the E-commerce API! Go to /docs for Swagger UI."}
 
+app.add_middleware(
+  CORSMiddleware,
+  allow_origins=["http://localhost:3000"],
+  allow_credentials=True,
+  allow_methods=["*"],
+  allow_headers=["*"],
+)
 
 if __name__ == "__main__":
     # Запуск сервера, якщо файл запускається напряму

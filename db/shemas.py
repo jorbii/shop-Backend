@@ -1,9 +1,10 @@
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
-from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator, PositiveFloat
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_serializer
 
-from db.models import OrderStatus, PaymentType, PaymentStatus
+from db.enums import PaymentType, HolderName
+from db.models import OrderStatus, PaymentStatus
 
 
 # ==========================================
@@ -25,7 +26,7 @@ class CountryResponse(BaseModel):
 
 # Базова схема (спільні поля)
 class UserBase(BaseModel):
-    login: str = Field(min_length=8, max_length=64)
+    login: str = Field(min_length=4, max_length=64)
     first_name: str = Field(min_length=1, max_length=50)
     last_name: str = Field(min_length=1, max_length=50)
     phone_number: Optional[str] = None
@@ -101,7 +102,7 @@ class CategoryResponse(CategoryBase):
 class ProductBase(BaseModel):
     name: str
     description: Optional[str] = None
-    price: PositiveFloat
+    price: Decimal
     category_id: int
     image_url: Optional[str] = None
 
@@ -124,8 +125,19 @@ class ProductResponse(ProductBase):
     stock_quantity: int
     category: Optional[CategoryResponse] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    @field_serializer('price')
+    def serialize_price(self, price: Decimal, _info):
+        # Перетворюємо на float для JSON
+        return float(price)
 
+    class Config:
+        from_attributes = True
+
+class ComparisonProductsResponce(BaseModel):
+    user_id: int
+    product_id: int
+
+    product: ProductResponse
 
 # ==========================================
 # 5. ЗАМОВЛЕННЯ (ORDERS) - Найскладніше
@@ -147,7 +159,6 @@ class OrderCreate(BaseModel):
 
 # Елемент замовлення (при перегляді ми хочемо бачити деталі товару)
 class OrderItemResponse(BaseModel):
-    id: int
     product_id: int
     product_name: str  # Можна витягнути з product.name через ORM
     quantity: int
@@ -156,18 +167,28 @@ class OrderItemResponse(BaseModel):
     # Або вкласти повний об'єкт товару (скорочений)
     product: Optional[ProductResponse] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    @field_serializer('price_at_purchase')
+    def serialize_price(self, price: Decimal, _info):
+        # Перетворюємо на float для JSON
+        return float(price)
 
+    class Config:
+        from_attributes = True
 
 class OrderResponse(BaseModel):
-    id: int
     user_id: int
     status: OrderStatus  # Використовуємо Enum
     total_price: Decimal
     created_at: datetime
     items: List[OrderItemResponse]  # Вкладений список товарів
 
-    model_config = ConfigDict(from_attributes=True)
+    @field_serializer('total_price')
+    def serialize_price(self, price: Decimal, _info):
+        # Перетворюємо на float для JSON
+        return float(price)
+
+    class Config:
+        from_attributes = True
 
 
 # ==========================================
@@ -181,7 +202,6 @@ class ReviewCreate(BaseModel):
 
 
 class ReviewResponse(BaseModel):
-    id: int
     user_id: int
     user_name: str  # Припустимо, ми додамо @property в модель User або через join
     rating: int
@@ -195,18 +215,40 @@ class ReviewResponse(BaseModel):
 # 7. ПЛАТЕЖІ (PAYMENTS)
 # ==========================================
 
+class WriteCreditCard(BaseModel):
+    card_number: str
+    create_date: date
+    ccv: str
+    holder_name: HolderName
+
+    # @field_serializer('card_number')
+    # def serialize_cart_number(self, cart_number: str, _info):
+    #     if not cart_number.isdigit() or len(cart_number) != 16:
+    #         raise ValueError('Unexpected cart number')
+    #     return cart_number
+
+
 class PaymentCreate(BaseModel):
     order_id: int
-    amount: Decimal
     payment_type: PaymentType
-    # token передається, якщо це нова карта
-    token: Optional[str] = None
+    credit_card: Optional[WriteCreditCard] = None
+    save_card: bool = False
+
+    class Config:
+        from_attributes = True
 
 
 class PaymentResponse(BaseModel):
-    id: int
-    amount: Decimal
+    order: OrderResponse
+    total_price: Decimal
     status: PaymentStatus
+    payment_type: PaymentType
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    @field_serializer('total_price')
+    def serialize_price(self, price: Decimal, _info):
+        # Перетворюємо на float для JSON
+        return float(price)
+
+    class Config:
+        from_attributes = True

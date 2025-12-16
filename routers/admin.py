@@ -5,6 +5,13 @@ from typing import List
 from db.database import get_db
 from db.models import Category, Product, User
 from db.shemas import CategoryBase, ProductBase, CategoryResponse, ProductResponse, ProductCreate, ProductUpdate
+from fastapi import HTTPException, APIRouter, Depends, status
+from sqlalchemy import or_
+from sqlalchemy.orm import Session, selectinload
+from typing import List
+from db.database import get_db
+from db.models import Category, Product, User
+from db.shemas import CategoryBase, ProductBase, CategoryResponse, ProductResponse, ProductCreate, ProductUpdate
 
 router = APIRouter()
 

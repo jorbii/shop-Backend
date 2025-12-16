@@ -1,11 +1,11 @@
 import enum
 
-class OrderStatus(enum.Enum):
-    NEW = "new"
-    PAID = "paid"
-    SHIPPED = "shipped"
-    DELIVERED = "delivered"
-    CANCELLED = "cancelled"
+class OrderStatus(str, enum.Enum):
+    NEW = "NEW"
+    PAID = "PAID"
+    SHIPPED = "SHIPPED"
+    DELIVERED = "DELIVERED"
+    CANCELLED = "CANCELLED"
 
 
 class PaymentStatus(enum.Enum):
@@ -20,3 +20,7 @@ class PaymentType(enum.Enum):
     APPLE_PAY = "apple_pay"
     CASH_ON_DELIVERY = "cash_on_delivery"
     BANK_TRANSFER = "bank_transfer"
+
+class HolderName(enum.Enum):
+    VISA = "visa"
+    MASTERCARD = "mastercard"

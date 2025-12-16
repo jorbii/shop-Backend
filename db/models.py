@@ -1,21 +1,21 @@
-from datetime import datetime
+from datetime import datetime, date
 from typing import List, Optional
-import enum
-from uuid import uuid4
+
+from sqlalchemy import String, ForeignKey, Integer, DECIMAL, Boolean, Text, func, Date
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from db.database import Base
-from sqlalchemy import String, ForeignKey, Integer, DECIMAL, Boolean, Text, DateTime, Date, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from db.enums import *
+from db.enums import OrderStatus, PaymentStatus, PaymentType, HolderName  # Припускаємо, що це імпортовано коректно
+
 
 # --- МОДЕЛІ (Таблиці) ---
 
 class Country(Base):
     __tablename__ = "countries"
 
-    code: Mapped[str] = mapped_column(String(2), primary_key=True)  # ISO код: 'UA', 'US'
+    code: Mapped[str] = mapped_column(String(2), primary_key=True)
     name: Mapped[str] = mapped_column(String(100))
 
-    # Зв'язок: Країна має багато адрес доставки
     addresses: Mapped[List["UserAddress"]] = relationship(back_populates="country")
 
 
@@ -25,21 +25,24 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(150), unique=True, index=True)
     password: Mapped[str] = mapped_column(String(255))
-    login: Mapped[str] = mapped_column(String(200))# Пароль має бути захешований!
+    login: Mapped[str] = mapped_column(String(200))
     first_name: Mapped[str] = mapped_column(String(50))
     last_name: Mapped[str] = mapped_column(String(50))
     phone_number: Mapped[Optional[str]] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 
-    # Зв'язки
+    # Виправлено назву relationship на orders, щоб відповідало логіці
     orders: Mapped[List["Order"]] = relationship(back_populates="user")
     reviews: Mapped[List["Review"]] = relationship(back_populates="user")
     addresses: Mapped[List["UserAddress"]] = relationship(back_populates="user")
-    payment_methods: Mapped[List["PaymentMethod"]] = relationship(back_populates="user")
+    payments: Mapped[List["Payment"]] = relationship(back_populates="user")
+
+    # Додано для зручності доступу до порівнянь
+    comparisons: Mapped[List["ComparisonProducts"]] = relationship(back_populates="user")
 
 
 class UserAddress(Base):
-    __tablename__ = "user_addresses"
+    __tablename__ = "addresses"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
@@ -60,8 +63,6 @@ class Category(Base):
     name: Mapped[str] = mapped_column(String(100))
 
     products: Mapped[List["Product"]] = relationship(back_populates="category")
-    #
-    # children: Mapped[List["Category"]] = relationship("Category")
 
 
 class Product(Base):
@@ -71,66 +72,87 @@ class Product(Base):
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"))
     name: Mapped[str] = mapped_column(String(200), index=True)
     description: Mapped[Optional[str]] = mapped_column(Text)
-    price: Mapped[float] = mapped_column(DECIMAL(10, 2))  # DECIMAL важливий для грошей!
+    price: Mapped[float] = mapped_column(DECIMAL(10, 2))
     stock_quantity: Mapped[int] = mapped_column(Integer, default=0)
     image_url: Mapped[Optional[str]] = mapped_column(String)
 
     category: Mapped["Category"] = relationship(back_populates="products")
-    reviews: Mapped[List["Review"]] = relationship(back_populates="product")
-    # Цей зв'язок потрібен, щоб бачити, в яких замовленнях фігурував товар
+    reviews: Mapped[List["Review"]] = relationship(
+        back_populates="product")  # Виправлено back_populates на однину ("product"), див. клас Review
     order_items: Mapped[List["OrderItem"]] = relationship(back_populates="product")
 
+    # ✅ ВИПРАВЛЕННЯ: Додано відсутній атрибут
+    comparison_products: Mapped[List["ComparisonProducts"]] = relationship(back_populates="product")
 
+
+class ComparisonProducts(Base):
+    __tablename__ = "comparison_products"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
+
+    product: Mapped["Product"] = relationship(back_populates="comparison_products")
+    # Додаємо зв'язок з юзером (опціонально, але корисно)
+    user: Mapped["User"] = relationship(back_populates="comparisons")
+
+
+# ✅ ВИПРАВЛЕННЯ: Перейменовано клас Cart -> Order та таблицю "cart" -> "orders"
+# Це важливо, бо OrderItem та Payment посилаються на "orders.id"
 class Order(Base):
     __tablename__ = "orders"
+
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     status: Mapped[OrderStatus] = mapped_column(default=OrderStatus.NEW)
     total_price: Mapped[float] = mapped_column(DECIMAL(10, 2), default=0)
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 
-    user: Mapped["User"] = relationship(back_populates="orders")
+    user: Mapped["User"] = relationship(back_populates="orders")  # змінено cart -> orders
     items: Mapped[List["OrderItem"]] = relationship(back_populates="order", cascade="all, delete-orphan")
-    payment: Mapped[Optional["Payment"]] = relationship(back_populates="order")
+    payments: Mapped[Optional["Payment"]] = relationship(back_populates="order")
 
 
 class OrderItem(Base):
     __tablename__ = "order_items"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"))
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"))  # Тепер це посилання коректне
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
     quantity: Mapped[int] = mapped_column(Integer, default=1)
-    # Фіксуємо ціну на момент покупки!
     price_at_purchase: Mapped[float] = mapped_column(DECIMAL(10, 2))
 
     order: Mapped["Order"] = relationship(back_populates="items")
     product: Mapped["Product"] = relationship(back_populates="order_items")
 
 
-class PaymentMethod(Base):
-    __tablename__ = "payment_methods"
+class CreditCard(Base):
+    __tablename__ = "creditcard"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    provider: Mapped[str] = mapped_column(String(50))  # 'stripe', 'liqpay'
-    token: Mapped[str] = mapped_column(String(255))  # Токен, а не номер карти!
-    last_4_digits: Mapped[str] = mapped_column(String(4))
+    # provider: Mapped[str] = mapped_column(String(50))
+    # token: Mapped[str] = mapped_column(String(255))
+    cart_number: Mapped[str] = mapped_column(String(50))
+    create_date: Mapped[date] = mapped_column(Date)
+    ccv: Mapped[str] = mapped_column(String(4))
+    holder_name: Mapped[HolderName] = mapped_column()
 
-    user: Mapped["User"] = relationship(back_populates="payment_methods")
-
+    payments: Mapped[list["Payment"]] = relationship(back_populates="credit_card")
 
 class Payment(Base):
     __tablename__ = "payments"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"))
-    amount: Mapped[float] = mapped_column(DECIMAL(10, 2))
+    credit_card_id: Mapped[int | None] = mapped_column(ForeignKey("creditcard.id"), nullable=True)
     status: Mapped[PaymentStatus] = mapped_column(default=PaymentStatus.PENDING)
-    transaction_id: Mapped[Optional[str]] = mapped_column(String(100))  # ID від банку
+    payment_type: Mapped[PaymentType] = mapped_column(default=PaymentType.CREDIT_CARD)
 
-    order: Mapped["Order"] = relationship(back_populates="payment")
-
+    credit_card: Mapped["CreditCard"] = relationship(back_populates="payments")
+    order: Mapped["Order"] = relationship(back_populates="payments")
+    user: Mapped["User"] = relationship(back_populates="payments")
 
 class Review(Base):
     __tablename__ = "reviews"
@@ -138,7 +160,7 @@ class Review(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
-    rating: Mapped[int] = mapped_column(Integer)  # 1-5
+    rating: Mapped[int] = mapped_column(Integer)
     comment: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 
