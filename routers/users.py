@@ -1,7 +1,8 @@
+from typing import List
+
 from fastapi import HTTPException, APIRouter, Depends, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
-from typing import List
 
 from db.database import get_db
 from db.models import User, Order

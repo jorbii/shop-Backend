@@ -1,10 +1,11 @@
-from typing import List, Optional
 from datetime import datetime, date
 from decimal import Decimal
+from typing import List, Optional
+
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_serializer
 
-from db.enums import PaymentType, HolderName
-from db.models import OrderStatus, PaymentStatus
+from db.enums import PaymentType
+from db.models import OrderStatus
 
 
 # ==========================================
@@ -115,9 +116,9 @@ class ProductCreate(ProductBase):
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    price: Optional[Decimal] = None
-    stock_quantity: Optional[int] = None
-    category_id: Optional[int] = None
+    price: Optional[Decimal] = 0
+    stock_quantity: Optional[int] = 0
+    category_id: Optional[int] = 0
 
 
 class ProductResponse(ProductBase):
@@ -147,14 +148,7 @@ class ComparisonProductsResponce(BaseModel):
 class OrderItemCreate(BaseModel):
     product_id: int
     quantity: int = Field(ge=1)
-
-
-# Створення замовлення (список товарів)
-class OrderCreate(BaseModel):
-    items: List[OrderItemCreate]
-    # Адресу можна передати ID або об'єктом, для спрощення візьмемо ID
-    address_id: int
-    payment_method_id: Optional[int] = None  # Якщо платимо збереженою карткою
+    button_name: str
 
 
 # Елемент замовлення (при перегляді ми хочемо бачити деталі товару)
@@ -219,14 +213,16 @@ class WriteCreditCard(BaseModel):
     card_number: str
     create_date: date
     ccv: str
-    holder_name: HolderName
+    holder_name: str
 
-    # @field_serializer('card_number')
+    # @field_validator('card_number')
     # def serialize_cart_number(self, cart_number: str, _info):
     #     if not cart_number.isdigit() or len(cart_number) != 16:
     #         raise ValueError('Unexpected cart number')
     #     return cart_number
 
+class CreditCardResponce(WriteCreditCard):
+    id: int
 
 class PaymentCreate(BaseModel):
     order_id: int
@@ -241,7 +237,7 @@ class PaymentCreate(BaseModel):
 class PaymentResponse(BaseModel):
     order: OrderResponse
     total_price: Decimal
-    status: PaymentStatus
+    status: str
     payment_type: PaymentType
     created_at: datetime
 

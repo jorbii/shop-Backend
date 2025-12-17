@@ -1,11 +1,11 @@
-from datetime import datetime, date
+from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import String, ForeignKey, Integer, DECIMAL, Boolean, Text, func, Date
+from sqlalchemy import String, ForeignKey, Integer, DECIMAL, Boolean, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.database import Base
-from db.enums import OrderStatus, PaymentStatus, PaymentType, HolderName  # Припускаємо, що це імпортовано коректно
+from db.enums import OrderStatus, PaymentStatus, PaymentType  # Припускаємо, що це імпортовано коректно
 
 
 # --- МОДЕЛІ (Таблиці) ---
@@ -52,6 +52,7 @@ class UserAddress(Base):
     postal_code: Mapped[str] = mapped_column(String(20))
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    orders: Mapped[List["Order"]] = relationship(back_populates="addresses")
     user: Mapped["User"] = relationship(back_populates="addresses")
     country: Mapped["Country"] = relationship(back_populates="addresses")
 
@@ -97,8 +98,6 @@ class ComparisonProducts(Base):
     user: Mapped["User"] = relationship(back_populates="comparisons")
 
 
-# ✅ ВИПРАВЛЕННЯ: Перейменовано клас Cart -> Order та таблицю "cart" -> "orders"
-# Це важливо, бо OrderItem та Payment посилаються на "orders.id"
 class Order(Base):
     __tablename__ = "orders"
 
@@ -107,10 +106,12 @@ class Order(Base):
     status: Mapped[OrderStatus] = mapped_column(default=OrderStatus.NEW)
     total_price: Mapped[float] = mapped_column(DECIMAL(10, 2), default=0)
     created_at: Mapped[datetime] = mapped_column(default=func.now())
+    address_id: Mapped[int] = mapped_column(ForeignKey("addresses.id"))
 
-    user: Mapped["User"] = relationship(back_populates="orders")  # змінено cart -> orders
-    items: Mapped[List["OrderItem"]] = relationship(back_populates="order", cascade="all, delete-orphan")
-    payments: Mapped[Optional["Payment"]] = relationship(back_populates="order")
+    user: Mapped["User"] = relationship(back_populates="orders")
+    addresses: Mapped["UserAddress"] = relationship(back_populates="orders")
+    items: Mapped[List["OrderItem"]] = relationship(back_populates="orders", cascade="all, delete-orphan")
+    payments: Mapped[Optional["Payment"]] = relationship(back_populates="orders")
 
 
 class OrderItem(Base):
@@ -122,7 +123,7 @@ class OrderItem(Base):
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     price_at_purchase: Mapped[float] = mapped_column(DECIMAL(10, 2))
 
-    order: Mapped["Order"] = relationship(back_populates="items")
+    orders: Mapped["Order"] = relationship(back_populates="items")
     product: Mapped["Product"] = relationship(back_populates="order_items")
 
 
@@ -133,10 +134,7 @@ class CreditCard(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     # provider: Mapped[str] = mapped_column(String(50))
     # token: Mapped[str] = mapped_column(String(255))
-    cart_number: Mapped[str] = mapped_column(String(50))
-    create_date: Mapped[date] = mapped_column(Date)
-    ccv: Mapped[str] = mapped_column(String(4))
-    holder_name: Mapped[HolderName] = mapped_column()
+    last_4_numbers: Mapped[str] = mapped_column(String(50))
 
     payments: Mapped[list["Payment"]] = relationship(back_populates="credit_card")
 
@@ -148,10 +146,10 @@ class Payment(Base):
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"))
     credit_card_id: Mapped[int | None] = mapped_column(ForeignKey("creditcard.id"), nullable=True)
     status: Mapped[PaymentStatus] = mapped_column(default=PaymentStatus.PENDING)
-    payment_type: Mapped[PaymentType] = mapped_column(default=PaymentType.CREDIT_CARD)
+    payment_type: Mapped[PaymentType] = mapped_column(default=PaymentType.credit_card)
 
     credit_card: Mapped["CreditCard"] = relationship(back_populates="payments")
-    order: Mapped["Order"] = relationship(back_populates="payments")
+    orders: Mapped["Order"] = relationship(back_populates="payments")
     user: Mapped["User"] = relationship(back_populates="payments")
 
 class Review(Base):

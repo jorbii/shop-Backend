@@ -1,74 +1,70 @@
 from fastapi import HTTPException, APIRouter, Depends, status
-from sqlalchemy import or_
-from sqlalchemy.orm import Session, selectinload
-from typing import List
+from sqlalchemy.orm import Session
 from db.database import get_db
-from db.models import Category, Product, User
-from db.shemas import CategoryBase, ProductBase, CategoryResponse, ProductResponse, ProductCreate, ProductUpdate
-from fastapi import HTTPException, APIRouter, Depends, status
-from sqlalchemy import or_
-from sqlalchemy.orm import Session, selectinload
-from typing import List
-from db.database import get_db
-from db.models import Category, Product, User
-from db.shemas import CategoryBase, ProductBase, CategoryResponse, ProductResponse, ProductCreate, ProductUpdate
+from db.models import Category, Product
+from db.shemas import CategoryBase, CategoryResponse, ProductResponse, ProductCreate, ProductUpdate
 
 router = APIRouter()
 
 @router.post("/categories", response_model=CategoryResponse)
-def add_product(category: CategoryBase, db: Session = Depends(get_db)):
-    dict_category = category.model_dump()
+def add_category(category: CategoryBase, db: Session = Depends(get_db)):
+    if category is None:
+        raise HTTPException(status_code=404, detail="Please enter a valid category dane")
 
-    db_category = Category(**dict_category)
-    db.add(db_category)
-    db.commit()
-    return db_category
+    if category not in db.query(Category).all():
+        db_category = Category(**category.model_dump())
+        db.add(db_category)
+        db.commit()
+        return db_category
+    return HTTPException(status_code=404, detail="Category haven`been created")
 
 @router.put("/categories/{id}", response_model=CategoryResponse)
-def update_product(
+def update_category(
         id: int,
         category: CategoryBase,
         db: Session = Depends(get_db),
 ):
-    if category.id != id:
+    db_category = db.query(Category).get(id)
+
+    if db_category is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
-    db_category = category.model_dump(exclude_unset=True)
-    db.add(db_category)
-    db.commit()
-    db.refresh(db_category)
+
+    if db_category.id == id:
+
+        if category is None:
+            raise HTTPException(status_code=404, detail="Please enter a valid category dane")
+
+        updated_category = category.model_dump(exclude_unset=True)
+
+        for key, value in updated_category.items():
+            setattr(db_category, key, value)
+
+        db.commit()
 
     return db_category
 
 @router.delete("/categories/{id}", response_model=CategoryResponse)
-def delete_product(
+def delete_category(
         id: int,
         db: Session = Depends(get_db),
 ):
+    if not id:
+        raise HTTPException(status_code=404, detail="Please enter id")
+
     db_category = db.query(Category).get(id)
 
-    if not db_category:
+    if db_category is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
     db.delete(db_category)
     db.commit()
+
     return db_category
 
-
-@router.post("/products", response_model=ProductResponse)
-def add_product(product: ProductCreate, db: Session = Depends(get_db)):
-    db_product = Product(**product.model_dump())
-
-    if not db_product:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Product not found")
-
-    db.add(db_product)
-    db.commit()
-
-    return db_product
 
 
 

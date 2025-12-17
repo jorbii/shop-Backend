@@ -1,12 +1,12 @@
-from fastapi import HTTPException, APIRouter, Depends, status
-from sqlalchemy import or_
-from sqlalchemy.orm import Session, selectinload
-from typing import List
+from fastapi import HTTPException, APIRouter, Depends
+from sqlalchemy.orm import Session
+
 from db.database import get_db
 from db.enums import PaymentStatus, PaymentType
 from db.models import User, CreditCard, Payment, Order
-from db.shemas import PaymentResponse, PaymentCreate, WriteCreditCard
+from db.shemas import PaymentCreate
 from .auth import get_current_user
+
 router = APIRouter()
 
 @router.post("/initiate")
@@ -16,44 +16,55 @@ def create_payment(payment: PaymentCreate, current_user: User = Depends(get_curr
         Order.user_id == current_user.id
     ).first()
 
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found or access denied")
+    if order:
+        amount = order.total_price
+    else:
+        raise HTTPException(status_code=400, detail="Order haven`t been found")
 
-    if payment.payment_type == PaymentType.CREDIT_CARD:
+    if payment.payment_type == PaymentType.credit_card:
         if payment.credit_card is None:
             raise HTTPException(status_code=400, detail="Credit card is required")
 
-        payment_data = db.query(Payment).join(Order).options(
-            selectinload(Payment.order)
-        ).filter(
-            Order.id == payment.order_id
-        ).first()
+        card_id = None
 
-        # if payment_data:
-        #     amount = payment_data.total_price
-        # else:
-        #     raise HTTPException(status_code=400, detail="Order haven`t been found")
+        if payment.save_card:
+            masked_card = "*" * 12 + payment.credit_card.card_number[-4:]
+            existing_card = db.query(CreditCard).filter(
+                CreditCard.last_4_numbers == masked_card,
+                CreditCard.user_id == current_user.id  # Важливо перевірити власника!
+            ).first()
+
+            if existing_card is None:
+                new_card = CreditCard(
+                    user_id=current_user.id,
+                    last_4_numbers=masked_card
+                )
+
+                db.add(new_card)
+                db.flush()
+                db.refresh(new_card)
+
+                card_id = new_card.id
+            else:
+                card_id = existing_card.id
 
         transaction = Payment(
             user_id=current_user.id,
             order_id=payment.order_id,
-            payment_type=PaymentType.CREDIT_CARD
+            status=PaymentStatus.PENDING,
+            payment_type=payment.payment_type,
+            credit_card_id=card_id,
         )
 
         db.add(transaction)
 
-        if payment.save_card:
-            save_credit_card = CreditCard(
-                user_id=current_user.id,
-                cart_number=payment.credit_card.card_number,
-                create_date=payment.credit_card.create_date,
-                ccv=payment.credit_card.ccv,
-                holder_name=payment.credit_card.holder_name
-            )
+        try:
+            db.commit()
+            db.refresh(transaction)
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail="Payment processing error")
 
-            db.add(save_credit_card)
-
-        db.commit()
         return {"status": "paid", "receipt": transaction.id}
     return {"msg": "Other methods not implemented yet"}
 

@@ -14,13 +14,13 @@ class PaymentStatus(enum.Enum):
     FAILED = "failed"
 
 class PaymentType(enum.Enum):
-    CREDIT_CARD = "credit_card"
-    PAYPAL = "paypal"
-    GOOGLE_PAY = "google_pay"
-    APPLE_PAY = "apple_pay"
-    CASH_ON_DELIVERY = "cash_on_delivery"
-    BANK_TRANSFER = "bank_transfer"
+    credit_card = "credit_card"
+    paypal = "paypal"
+    google_pay = "google_pay"
+    apple_pay = "apple_pay"
+    cash_on_delivery = "cash_on_delivery"
+    bank_transfer = "bank_transfer"
 
 class HolderName(enum.Enum):
-    VISA = "visa"
-    MASTERCARD = "mastercard"
+    visa = "visa"
+    mastercard = "mastercard"

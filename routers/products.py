@@ -1,5 +1,5 @@
 from fastapi import HTTPException, APIRouter, Depends
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -30,6 +30,21 @@ def show_comparison_table(db: Session = Depends(get_db), current_user: User = De
     return db_comparison
 
 
+@router.get("/search", response_model=List[ProductResponse])
+def search_product(q: str | None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+
+    if q is None:
+        return []
+
+    search_products = db.query(Product)\
+        .filter(or_(Product.name.contains(q.lower()),
+        Product.description.contains((q.lower())))).all()
+
+    if search_products is None:
+        return []
+
+    return search_products
+
 @router.get("/{id}", response_model=ProductResponse)
 def one_product(id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     product = db.query(Product).get(id)
@@ -55,18 +70,4 @@ def related_products(id: int, db: Session = Depends(get_db), current_user: User 
 
     return "Product has been added into the comparison table"
 
-@router.get("/search", response_model=List[ProductResponse])
-def search_product(q: str = None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if not q:
-        return []
-
-    search_products = db.query(Product).filter(or_(
-                Product.name.ilike(f"%{q}%"),
-                Product.description.ilike(f"%{q}%")
-            )).all()
-
-    if not search_products:
-        return []
-
-    return search_products
 

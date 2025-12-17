@@ -12,6 +12,7 @@ from routers import (
     categories,
     orders,
     payments,
+    saller,
     admin
 )
 from db.database import Base, engine
@@ -59,11 +60,11 @@ app.include_router(
 # )
 
 # 5. Orders
-# app.include_router(
-#     orders.router,
-#     prefix="/orders",
-#     tags=["Orders"]
-# )
+app.include_router(
+    orders.router,
+    prefix="/orders",
+    tags=["Orders"]
+)
 
 # 6. Payments
 app.include_router(
@@ -84,7 +85,15 @@ app.include_router(
 app.include_router(
     constants.router,
     prefix="/constant",
-    tags=["constants"]
+    tags=["Constants"]
+)
+
+# 9 Saller
+
+app.include_router(
+    saller.router,
+    prefix="/saller",
+    tags=["Saller"]
 )
 
 
