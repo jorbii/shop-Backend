@@ -52,12 +52,12 @@ app.include_router(
 #     tags=["Categories"]
 # )
 #
-# # 4. Cart
-# app.include_router(
-#     cart.router,
-#     prefix="/cart",
-#     tags=["Cart"]
-# )
+# 4. Cart
+app.include_router(
+    cart.router,
+    prefix="/cart",
+    tags=["Cart"]
+)
 
 # 5. Orders
 app.include_router(

@@ -5,7 +5,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
 from db.database import get_db
-from db.models import User, Order
+from db.models import User, Order, Cart, OrderItem
 from db.shemas import UserUpdate, UserResponse, OrderResponse
 from routers.auth import get_current_user
 
@@ -40,7 +40,7 @@ def change_user(
                 raise HTTPException(status_code=400, detail=f"Login {user_update.login} already exists")
 
     # 4. Оновлення полів
-    updated_data = user_update.model_dump(exclude_unset=True)
+    updated_data = user_update.model_dump(exclude_unset=True, exclude_none=True)
     for key, value in updated_data.items():
         setattr(current_user, key, value)
 
@@ -51,13 +51,14 @@ def change_user(
     return current_user
 
 
-@router.delete('/me', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/me')
 def delete_user(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-
-    db.delete(current_user)
-    db.commit()
-
+    if current_user:
+        db.delete(current_user)
+        db.commit()
+        return f"User with id = {current_user.id} have been successfully deleted"
     return None
+
 
 
 @router.get('/orders', response_model=List[OrderResponse])
@@ -66,8 +67,12 @@ def get_orders(
         current_user: User = Depends(get_current_user)
 ):
     db_orders = db.query(Order) \
-        .options(selectinload(Order.items)) \
         .filter(Order.user_id == current_user.id) \
+        .options(selectinload(Order.items).joinedload(OrderItem.product)) \
         .all()
 
-    return db_orders
+    if db_orders is None:
+        return db_orders
+
+    return []
+

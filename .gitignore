@@ -1,0 +1,39 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Віртуальне оточення (Virtual Environments) ---
+# Найчастіші назви папок
+venv/
+env/
+.venv/
+.env/
+
+# --- Змінні оточення (Environment Variables) ---
+# КРИТИЧНО ВАЖЛИВО: Ніколи не завантажуйте секрети на GitHub
+.env
+.env.*
+# Виняток: приклад файлу конфігурації можна залишити
+!.env.example
+
+# --- База даних (SQLite) ---
+*.db
+*.sqlite
+*.sqlite3
+# Ваша конкретна база
+financial_tracker.db
+
+# --- IDE та редактори коду ---
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- Операційні системи ---
+.DS_Store
+Thumbs.db
+
+# --- Логи ---
+*.log
+logs/

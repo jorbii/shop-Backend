@@ -14,7 +14,7 @@ router = APIRouter()
 @router.post('/', response_model=OrderItemResponse)
 def add_to_cart(order: OrderItemCreate, current_user: User = Depends(get_current_user),db: Session = Depends(get_db)):
     if order.button_name == "add_to_cart":
-        db_order = db.query(OrderItem).filter(OrderItem.order_id == order.order_id).first()
+        db_order = db.query(OrderItem).filter(OrderItem.order_id == order.order_id).scalar()
         if db_order:
             raise HTTPException(status_code=400, detail='Order already added to cart.')
 

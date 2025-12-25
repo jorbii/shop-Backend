@@ -39,11 +39,11 @@ class UserCreate(UserBase):
     password: str = Field(min_length=3, max_length=72, description="Пароль мінімум 8 символів")
 
 class UserUpdate(BaseModel):
-    first_name: Optional[str]
-    last_name: Optional[str]
-    login: Optional[str]
-    email: Optional[EmailStr]
-    phone_number: Optional[str]
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    login: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone_number: Optional[str] = None
 
 # Логін
 class UserLogin(BaseModel):
@@ -61,6 +61,11 @@ class UserResponse(UserBase):
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
+class WriteToken(UserBase):
+    sub: str
+    exp: Decimal
+    token_type: str
+
 
 # ==========================================
 # 3. АДРЕСИ (ADDRESSES)
@@ -74,16 +79,8 @@ class AddressBase(BaseModel):
     is_default: bool = False
 
 
-class AddressCreate(AddressBase):
-    pass
-
-
-class AddressResponse(AddressBase):
-    id: int
-    # Можемо вкласти назву країни
-    country: Optional[CountryResponse] = None
-
-    model_config = ConfigDict(from_attributes=True)
+class OrderCreate(AddressBase):
+    address_id: int | None
 
 
 # ==========================================
@@ -248,3 +245,4 @@ class PaymentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+

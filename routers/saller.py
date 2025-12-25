@@ -25,14 +25,6 @@ def add_product(product: ProductCreate, db: Session = Depends(get_db)):
 
     return db_product
 
-@router.get("/products/{product_id}", response_model=ProductResponse)
-def get_product(product_id: int, db: Session = Depends(get_db)):
-    product = db.query(Product).filter(Product.id == product_id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-
-    return product
-
 @router.put("/products/{product_id}", response_model=ProductResponse)
 def update_product(product_id: int, product: ProductCreate, db: Session = Depends(get_db)):
     db_product = db.query(Product).filter(Product.id == product_id).first()
@@ -52,11 +44,14 @@ def update_product(product_id: int, product: ProductCreate, db: Session = Depend
         return db_product
     return HTTPException(status_code=404, detail="Product haven't been updated")
 
-
-
-
-
-
+@router.delete("/products/{product_id}")
+def delete_product(product_id: int, db: Session = Depends(get_db)):
+    db_product = db.query(Product).filter(Product.id == product_id).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    db.delete(db_product)
+    db.commit()
+    return HTTPException(status_code=204, detail="Product deleted")
 
 
 

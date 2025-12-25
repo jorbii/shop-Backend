@@ -12,7 +12,7 @@ router = APIRouter()
 
 
 @router.get("/", response_model=List[ProductResponse])
-def products(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def products(db: Session = Depends(get_db)):
     products = db.query(Product).all()
 
     if not products:
@@ -31,7 +31,7 @@ def show_comparison_table(db: Session = Depends(get_db), current_user: User = De
 
 
 @router.get("/search", response_model=List[ProductResponse])
-def search_product(q: str | None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def search_product(q: str | None, db: Session = Depends(get_db)):
 
     if q is None:
         return []
@@ -46,7 +46,7 @@ def search_product(q: str | None, current_user: User = Depends(get_current_user)
     return search_products
 
 @router.get("/{id}", response_model=ProductResponse)
-def one_product(id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def one_product(id: int, db: Session = Depends(get_db)):
     product = db.query(Product).get(id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")

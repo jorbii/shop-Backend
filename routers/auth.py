@@ -1,16 +1,19 @@
-epends, HTTPException, status
+from datetime import datetime, timedelta, timezone
+
+from fastapi import Depends, HTTPException, status, APIRouter
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from db.database import get_db
-from db.shemas import UserCreate, UserResponse, UserForgotPassword
-from db.models import User
+from sqlalchemy.orm import Session
 
+from db.database import get_db
+from db.models import User, TokenBlackList, Cart
+from db.shemas import UserCreate, UserResponse, UserForgotPassword
 
 SECRET_KEY = "my_super_secret_key_123"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+ACCESS_TOKEN_EXPIRE_MINUTES = 15
+REFRESH_TOKEN_EXPIRE_TIME = 7
 router = APIRouter(tags=["Auth"])
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -44,15 +47,19 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    check_token = db.query(TokenBlackList).filter(TokenBlackList.token == token).first()
+    if check_token:
+        raise credentials_exception
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        login: str = payload.get("sub")
+        sub: str = payload.get("sub")
         token_type: str = payload.get("type")
 
-        if login is None or token_type != "access":
+        if sub is None or token_type != "access":
             raise credentials_exception
 
-        user = db.query(User).filter(User.login == login).first()
+        user = db.query(User).filter(User.login == sub).first()
         if user is None:
             raise credentials_exception
 
@@ -86,6 +93,13 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
 
+    cart = Cart(
+        user_id=new_user.id,
+    )
+
+    db.add(cart)
+    db.commit()
+
     return new_user
 
 
@@ -105,11 +119,15 @@ def login(user_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
         token_type="access"
     )
+
     refresh_token = create_token(
         data={"sub": user.login},
-        expires_delta=timedelta(days=7),
+        expires_delta=timedelta(days=REFRESH_TOKEN_EXPIRE_TIME),
         token_type="refresh"
     )
+    #
+    # db.add(refresh_token)
+    db.commit()
 
     return {
         "access_token": access_token,
@@ -117,8 +135,41 @@ def login(user_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         "token_type": "bearer"
     }
 
+@router.post('/logout')
+def logout( token: str = Depends(oauth2_scheme),
+            db: Session = Depends(get_db),
+            current_user: User = Depends(get_current_user)
+):
 
-@router.post('/refresh')
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        db.refresh(current_user)
+
+        current_user.last_logout_at = datetime.now(timezone.utc)
+
+        check_token = db.query(TokenBlackList).filter(TokenBlackList.token == token).first()
+
+        if check_token:
+            raise credentials_exception
+
+        new_blacklisted_token = TokenBlackList(
+            token = token
+        )
+        db.add(new_blacklisted_token)
+        db.commit()
+
+        return f"Logout successfully"
+
+    except Exception as e:
+        return f"Error {e}"
+
+
+@router.post("/refresh")
 def refresh_token_endpoint(refresh_token: str, db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -127,15 +178,16 @@ def refresh_token_endpoint(refresh_token: str, db: Session = Depends(get_db)):
 
     try:
         payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
-        login: str = payload.get("sub")
+        sub: str = payload.get("sub")
         token_type: str = payload.get("type")
 
-        if login is None or token_type != "refresh":
+        if sub is None or token_type != "refresh":
             raise credentials_exception
+
     except JWTError:
         raise credentials_exception
 
-    user = db.query(User).filter(User.login == login).first()
+    user = db.query(User).filter(User.login == sub).first()
     if user is None:
         raise credentials_exception
 
@@ -146,7 +198,7 @@ def refresh_token_endpoint(refresh_token: str, db: Session = Depends(get_db)):
     )
     new_refresh_token = create_token(
         data={"sub": user.login},
-        expires_delta=timedelta(days=7),
+        expires_delta=timedelta(days=REFRESH_TOKEN_EXPIRE_TIME),
         token_type="refresh"
     )
 
