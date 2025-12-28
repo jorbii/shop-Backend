@@ -5,7 +5,7 @@ from typing import List
 
 from db.database import get_db
 from db.models import User, Product, ComparisonProducts
-from db.shemas import ProductResponse, ComparisonProductsResponce
+from db.shemas import ProductResponse, ComparisonProductsResponse
 from routers.auth import get_current_user
 
 router = APIRouter()
@@ -20,7 +20,7 @@ def products(db: Session = Depends(get_db)):
 
     return products
 
-@router.get("/comparison", response_model=List[ComparisonProductsResponce])
+@router.get("/comparison", response_model=List[ComparisonProductsResponse])
 def show_comparison_table(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     db_comparison = db.query(ComparisonProducts).filter(ComparisonProducts.user_id == current_user.id).all()
 

@@ -131,7 +131,7 @@ class ProductResponse(ProductBase):
     class Config:
         from_attributes = True
 
-class ComparisonProductsResponce(BaseModel):
+class ComparisonProductsResponse(BaseModel):
     user_id: int
     product_id: int
 
@@ -145,15 +145,12 @@ class ComparisonProductsResponce(BaseModel):
 class OrderItemCreate(BaseModel):
     product_id: int
     quantity: int = Field(ge=1)
-    button_name: str
-
 
 # Елемент замовлення (при перегляді ми хочемо бачити деталі товару)
 class OrderItemResponse(BaseModel):
-    product_id: int
-    product_name: str  # Можна витягнути з product.name через ORM
+    id: int
     quantity: int
-    price_at_purchase: Decimal  # Історична ціна
+    price_at_purchase: Decimal
 
     # Або вкласти повний об'єкт товару (скорочений)
     product: Optional[ProductResponse] = None
@@ -171,11 +168,27 @@ class OrderResponse(BaseModel):
     status: OrderStatus  # Використовуємо Enum
     total_price: Decimal
     created_at: datetime
-    items: List[OrderItemResponse]  # Вкладений список товарів
+    items: List[OrderItemResponse]
+    payments: List[PaymentResponse]
 
     @field_serializer('total_price')
     def serialize_price(self, price: Decimal, _info):
         # Перетворюємо на float для JSON
+        return float(price)
+
+    class Config:
+        from_attributes = True
+
+
+
+class CartResponse(BaseModel):
+    user_id: int
+    total_price: Decimal
+
+    items: List[OrderItemResponse]
+
+    @field_serializer("total_price")
+    def serialize_price(self, price: Decimal, _info):
         return float(price)
 
     class Config:

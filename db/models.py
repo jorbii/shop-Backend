@@ -110,9 +110,9 @@ class Order(Base):
     __tablename__ = "orders"
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    cart_id: Mapped[int] = mapped_column(ForeignKey("carts.id"))  # Посилання на кошик-джерело
+    cart_id: Mapped[int] = mapped_column(ForeignKey("carts.id"))
     status: Mapped[OrderStatus] = mapped_column(default=OrderStatus.NEW)
-    total_price: Mapped[float] = mapped_column(DECIMAL(10, 2), default=0)
+    total_price: Mapped[float] = mapped_column(DECIMAL(10, 2))
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     address_id: Mapped[int] = mapped_column(ForeignKey("addresses.id"))
 
@@ -128,13 +128,13 @@ class Order(Base):
 
 class OrderItem(Base):
     __tablename__ = "order_items"
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer ,primary_key=True, autoincrement=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
     quantity: Mapped[int] = mapped_column(Integer, default=1)
-    price_at_purchase: Mapped[float] = mapped_column(DECIMAL(10, 2))
+    price_at_purchase: Mapped[float] = mapped_column(DECIMAL(10, 2), default=0)
 
     # Зв'язок з кошиком
-    cart_id: Mapped[int | None] = mapped_column(ForeignKey("carts.id"), nullable=True)
+    cart_id: Mapped[int] = mapped_column(ForeignKey("carts.id"))
     # Зв'язок із замовленням
     order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id"), nullable=True)
 
@@ -146,6 +146,7 @@ class Cart(Base):
     __tablename__ = "carts"
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    total_price: Mapped[float] = mapped_column(DECIMAL(10, 2), default=0)
 
     user: Mapped["User"] = relationship(back_populates="carts")
     # Кошик має багато елементів
