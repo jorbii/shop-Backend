@@ -113,6 +113,7 @@ class Order(Base):
     cart_id: Mapped[int] = mapped_column(ForeignKey("carts.id"))
     status: Mapped[OrderStatus] = mapped_column(default=OrderStatus.NEW)
     total_price: Mapped[float] = mapped_column(DECIMAL(10, 2))
+    payment_type: Mapped[PaymentType] = mapped_column(default=PaymentType.credit_card)
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     address_id: Mapped[int] = mapped_column(ForeignKey("addresses.id"))
 
@@ -152,7 +153,7 @@ class Cart(Base):
     # Кошик має багато елементів
     items: Mapped[List["OrderItem"]] = relationship(back_populates="carts", cascade="all, delete-orphan")
     # Зв'язок із замовленнями, що були створені з цього кошика
-    orders: Mapped[List["Order"]] = relationship(back_populates="carts")
+    orders: Mapped[List["Order"]] = relationship(back_populates="carts", cascade="all, delete-orphan")
 
 class CreditCard(Base):
     __tablename__ = "creditcard"
@@ -173,7 +174,6 @@ class Payment(Base):
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"))
     credit_card_id: Mapped[int | None] = mapped_column(ForeignKey("creditcard.id"), nullable=True)
     status: Mapped[PaymentStatus] = mapped_column(default=PaymentStatus.PENDING)
-    payment_type: Mapped[PaymentType] = mapped_column(default=PaymentType.credit_card)
 
     credit_card: Mapped["CreditCard"] = relationship(back_populates="payments")
     orders: Mapped["Order"] = relationship(back_populates="payments")

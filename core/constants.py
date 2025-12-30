@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.exc import NoResultFound
-from sqlalchemy.orm import Session
-from db.enums import *
-from db.models import OrderItem, Cart, User, Order
+from sqlalchemy.orm import Session, selectinload
+
 from db.database import get_db
+from db.enums import *
+from db.models import OrderItem, Cart, User, Order, Product
 from routers.auth import get_current_user
 
 router = APIRouter()
@@ -16,24 +18,24 @@ def get_enums():
         "payment_type": [e.value for e in PaymentType]
     }
 
-def calculate_total_price(cart_id: int, db: Session = Depends(get_db)):
-    items = db.query(OrderItem).filter(OrderItem.cart_id == cart_id).all()
-
-    total_price_sum = sum(item.quantity * item.price_at_purchase for item in items)
-
-    return total_price_sum
-
-def check_the_cart(current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db)):
+def calculate_total_price(db, cart):
     try:
-        cart = db.query(Cart).filter(Cart.user_id == current_user.id).scalar()
+        total_price = db.query(func.sum(OrderItem.quantity * OrderItem.price_at_purchase)) \
+            .filter(OrderItem.cart_id == cart.id).scalar()
+        return total_price
+    except NoResultFound:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="The cart is empty.")
+
+def check_the_cart(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        cart = db.query(Cart).filter(Cart.user_id == current_user.id).first()
         return cart
 
     except NoResultFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"message": "The cart is empty."})
 
 def order_status(order_id: int, db: Session = Depends(get_db)) -> Order:
-    order = db.query(Order).get(order_id)
+    order = db.query(Order).options(selectinload(OrderItem)).get(order_id)
 
     if not order:
         raise HTTPException(
@@ -48,3 +50,15 @@ def order_status(order_id: int, db: Session = Depends(get_db)) -> Order:
         )
 
     return order
+
+
+def check_product_quantity(product_id, order_item, db):
+    product = db.query(Product).get(product_id)
+
+    if product.stock_quantity >= order_item.quantity:
+        product.stock_quantity -= order_item.quantity
+        db.add(product)
+        db.commit()
+        return False
+    else:
+        return True

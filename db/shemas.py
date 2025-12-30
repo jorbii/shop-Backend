@@ -157,7 +157,6 @@ class OrderItemResponse(BaseModel):
 
     @field_serializer('price_at_purchase')
     def serialize_price(self, price: Decimal, _info):
-        # Перетворюємо на float для JSON
         return float(price)
 
     class Config:
@@ -168,12 +167,11 @@ class OrderResponse(BaseModel):
     status: OrderStatus  # Використовуємо Enum
     total_price: Decimal
     created_at: datetime
+    payment_type: str
     items: List[OrderItemResponse]
-    payments: List[PaymentResponse]
 
     @field_serializer('total_price')
     def serialize_price(self, price: Decimal, _info):
-        # Перетворюємо на float для JSON
         return float(price)
 
     class Config:
@@ -225,17 +223,16 @@ class WriteCreditCard(BaseModel):
     ccv: str
     holder_name: str
 
-    # @field_validator('card_number')
-    # def serialize_cart_number(self, cart_number: str, _info):
-    #     if not cart_number.isdigit() or len(cart_number) != 16:
-    #         raise ValueError('Unexpected cart number')
-    #     return cart_number
+    @field_serializer('card_number')
+    def serialize_cart_number(self, cart_number: str, _info):
+        if not cart_number.isdigit() or len(cart_number) != 16:
+            raise ValueError('Unexpected cart number')
+        return cart_number
 
-class CreditCardResponce(WriteCreditCard):
+class CreditCardResponse(WriteCreditCard):
     id: int
 
 class PaymentCreate(BaseModel):
-    order_id: int
     payment_type: PaymentType
     credit_card: Optional[WriteCreditCard] = None
     save_card: bool = False
@@ -245,7 +242,7 @@ class PaymentCreate(BaseModel):
 
 
 class PaymentResponse(BaseModel):
-    order: OrderResponse
+    order_id: int
     total_price: Decimal
     status: str
     payment_type: PaymentType

@@ -2,23 +2,17 @@ from fastapi import HTTPException, APIRouter, Depends
 
 from sqlalchemy.orm import Session
 
-from core.constants import calculate_total_price, order_status
+from core.constants import order_status, check_the_cart
 from db.database import get_db
 from db.enums import OrderStatus
 from db.models import User, Order, UserAddress, Cart
 from db.shemas import OrderResponse, OrderCreate
-from routers.auth import get_current_user
 
 
 router = APIRouter()
 
 @router.post('/', response_model=OrderResponse)
-def create_order(address: OrderCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    cart = db.query(Cart).filter(Cart.user_id == current_user.id).scalar()
-
-    if not cart:
-        raise HTTPException(status_code=401, detail="Login please")
-
+def create_order(address: OrderCreate, cart: Cart = Depends(check_the_cart), db: Session = Depends(get_db)):
     cart_items = [item for item in cart.items if item.order_id is None] if cart else []
 
     if not cart_items:
@@ -26,7 +20,7 @@ def create_order(address: OrderCreate, current_user: User = Depends(get_current_
 
     if address.address_id:
         db_address = db.query(UserAddress).filter(UserAddress.id == address.address_id,
-                                              UserAddress.user_id == current_user.id).scalar()
+                                              UserAddress.user_id == cart.user_id).scalar()
         if not db_address:
             raise HTTPException(
                 status_code=404,
@@ -36,7 +30,7 @@ def create_order(address: OrderCreate, current_user: User = Depends(get_current_
         address_id = db_address.id
 
     else:
-        new_address = UserAddress(user_id = current_user.id, **address.model_dump(exclude={'address_id'}))
+        new_address = UserAddress(user_id = cart.user_id, **address.model_dump(exclude={'address_id'}))
 
         db.add(new_address)
         db.commit()
@@ -44,7 +38,7 @@ def create_order(address: OrderCreate, current_user: User = Depends(get_current_
 
         address_id = new_address.id
 
-    order = Order(user_id=current_user.id, status=OrderStatus.NEW, total_price=cart.total_price ,cart_id=cart.id, address_id = address_id)
+    order = Order(user_id=cart.user_id, status=OrderStatus.NEW, total_price=cart.total_price ,cart_id=cart.id, address_id = address_id)
 
     try:
         db.add(order)
@@ -64,6 +58,7 @@ def create_order(address: OrderCreate, current_user: User = Depends(get_current_
 
 @router.get('/{order_id}', response_model=OrderResponse)
 def order_info(order: Order = Depends(order_status), db: Session = Depends(get_db)):
+    order = order
     return order
 
 

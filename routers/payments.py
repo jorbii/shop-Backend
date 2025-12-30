@@ -1,6 +1,7 @@
 from fastapi import HTTPException, APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from core.constants import order_status
 from db.database import get_db
 from db.enums import PaymentStatus, PaymentType
 from db.models import User, CreditCard, Payment, Order
@@ -10,11 +11,7 @@ from .auth import get_current_user
 router = APIRouter()
 
 @router.post("/initiate")
-def create_payment(payment: PaymentCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    order = db.query(Order).filter(
-        Order.id == payment.order_id,
-        Order.user_id == current_user.id
-    ).first()
+def create_payment(payment: PaymentCreate, order: Order = Depends(order_status) ,current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
 
     if order:
         amount = order.total_price
@@ -31,7 +28,7 @@ def create_payment(payment: PaymentCreate, current_user: User = Depends(get_curr
             masked_card = "*" * 12 + payment.credit_card.card_number[-4:]
             existing_card = db.query(CreditCard).filter(
                 CreditCard.last_4_numbers == masked_card,
-                CreditCard.user_id == current_user.id  # Важливо перевірити власника!
+                CreditCard.user_id == current_user.id
             ).first()
 
             if existing_card is None:
@@ -52,7 +49,6 @@ def create_payment(payment: PaymentCreate, current_user: User = Depends(get_curr
             user_id=current_user.id,
             order_id=payment.order_id,
             status=PaymentStatus.PENDING,
-            payment_type=payment.payment_type,
             credit_card_id=card_id,
         )
 
@@ -65,7 +61,7 @@ def create_payment(payment: PaymentCreate, current_user: User = Depends(get_curr
             db.rollback()
             raise HTTPException(status_code=500, detail="Payment processing error")
 
-        return {"status": "paid", "receipt": transaction.id}
+        return {"status": f"{PaymentStatus.PENDING}", "receipt": transaction.id}
     return {"msg": "Other methods not implemented yet"}
 
 

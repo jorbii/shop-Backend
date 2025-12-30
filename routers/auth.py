@@ -9,11 +9,8 @@ from sqlalchemy.orm import Session
 from db.database import get_db
 from db.models import User, TokenBlackList, Cart
 from db.shemas import UserCreate, UserResponse, UserForgotPassword
+from core.config import settings
 
-SECRET_KEY = "my_super_secret_key_123"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 15
-REFRESH_TOKEN_EXPIRE_TIME = 7
 router = APIRouter(tags=["Auth"])
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -33,7 +30,7 @@ def create_token(data: dict, expires_delta: timedelta, token_type: str):
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + expires_delta
     to_encode.update({"exp": expire, "type": token_type})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
 def get_current_user(
@@ -52,7 +49,7 @@ def get_current_user(
         raise credentials_exception
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         sub: str = payload.get("sub")
         token_type: str = payload.get("type")
 
@@ -116,13 +113,13 @@ def login(user_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
     access_token = create_token(
         data={"sub": user.login},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
         token_type="access"
     )
 
     refresh_token = create_token(
         data={"sub": user.login},
-        expires_delta=timedelta(days=REFRESH_TOKEN_EXPIRE_TIME),
+        expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_TIME),
         token_type="refresh"
     )
     #
@@ -177,7 +174,7 @@ def refresh_token_endpoint(refresh_token: str, db: Session = Depends(get_db)):
     )
 
     try:
-        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         sub: str = payload.get("sub")
         token_type: str = payload.get("type")
 
@@ -193,12 +190,12 @@ def refresh_token_endpoint(refresh_token: str, db: Session = Depends(get_db)):
 
     new_access_token = create_token(
         data={"sub": user.login},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
         token_type="access"
     )
     new_refresh_token = create_token(
         data={"sub": user.login},
-        expires_delta=timedelta(days=REFRESH_TOKEN_EXPIRE_TIME),
+        expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_TIME),
         token_type="refresh"
     )
 
