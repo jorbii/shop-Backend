@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from core.constants import order_status
 from db.database import get_db
 from db.enums import PaymentStatus, PaymentType
-from db.models import User, CreditCard, Payment, Order
+from db.models import User, CreditCard, Payment, Order, Cart
 from db.shemas import PaymentCreate
 from .auth import get_current_user
 
@@ -47,16 +47,24 @@ def create_payment(payment: PaymentCreate, order: Order = Depends(order_status) 
 
         transaction = Payment(
             user_id=current_user.id,
-            order_id=payment.order_id,
+            order_id=order.id,
             status=PaymentStatus.PENDING,
             credit_card_id=card_id,
         )
 
         db.add(transaction)
 
+        cart = db.query(Cart).filter(Cart.user_id == current_user.id).scalar()
+
         try:
             db.commit()
             db.refresh(transaction)
+
+            cart.total_price = 0
+            for item in cart.items:
+                db.delete(item)
+            db.commit()
+
         except Exception as e:
             db.rollback()
             raise HTTPException(status_code=500, detail="Payment processing error")

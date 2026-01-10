@@ -8,7 +8,6 @@ __pycache__/
 venv/
 env/
 .venv/
-.env/
 
 # --- Змінні оточення (Environment Variables) ---
 # КРИТИЧНО ВАЖЛИВО: Ніколи не завантажуйте секрети на GitHub

@@ -35,11 +35,13 @@ def get_cart(current_user: User = Depends(get_current_user), db =  Depends(get_d
 @router.post('/item', response_model=OrderItemResponse)
 def add_to_cart(order: OrderItemCreate, cart: Cart = Depends(check_the_cart), db: Session = Depends(get_db)):
     product = db.query(Product).filter(Product.id == order.product_id).scalar()
+    if not product:
+        raise HTTPException(status_code=404, detail='No product found.')
 
     db_order = db.query(OrderItem).filter(OrderItem.cart_id == cart.id, OrderItem.product_id == product.id).first()
 
     if db_order:
-        if check_product_quantity(product.id, db_order, db):
+        if product.stock_quantity < db_order.quantity:
             raise HTTPException(status_code=400, detail='Quantity is already taken.')
         db_order.quantity += order.quantity
         db.add(db_order)

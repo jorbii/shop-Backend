@@ -35,7 +35,10 @@ def check_the_cart(db: Session = Depends(get_db), current_user: User = Depends(g
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"message": "The cart is empty."})
 
 def order_status(order_id: int, db: Session = Depends(get_db)) -> Order:
-    order = db.query(Order).options(selectinload(OrderItem)).get(order_id)
+    order = db.query(Order) \
+        .filter(Order.id == order_id) \
+        .options(selectinload(Order.items).joinedload(OrderItem.product)) \
+        .scalar()
 
     if not order:
         raise HTTPException(

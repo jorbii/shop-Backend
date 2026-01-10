@@ -9,7 +9,7 @@ from routers import (
     users,
     products,
     cart,
-    categories,
+    # categories,
     orders,
     payments,
     saller,
@@ -20,7 +20,7 @@ from db.database import Base, engine
 Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="My E-commerce API",
-    description="API магазинчику на імітації DB",
+    description="API магазинчику",
     version="0.1.0"
 )
 

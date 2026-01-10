@@ -72,7 +72,6 @@ def get_orders(
         .all()
 
     if db_orders is None:
-        return db_orders
-
-    return []
+        return []
+    return db_orders
 
