@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  # Сервіс 1: База Даних
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: shop_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # Зберігаємо дані БД
+
+  # Сервіс 2: Твоє API
+  web:
+    build:
+      context: .           # Шукаємо Dockerfile тут
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload # --reload для розробки
+    ports:
+      - "8000:8000"        # Відкриваємо порт назовні
+    volumes:
+      - .:/app             # "Дзеркало" коду (щоб бачити зміни без перезапуску)
+    environment:
+      # Зверни увагу: host тут 'db', як назва сервісу вище!
+      SQLALCHEMY_DATABASE_URL: postgresql+asyncpg://postgres:password@db:5432/shop_db
+    depends_on:
+      - db                 # Чекаємо запуску бази
+
+volumes:
+  postgres_data:
