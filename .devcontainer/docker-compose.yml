@@ -21,10 +21,9 @@ services:
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload # --reload для розробки
     ports:
       - "8000:8000"        # Відкриваємо порт назовні
-    volumes:
-      - .:/app             # "Дзеркало" коду (щоб бачити зміни без перезапуску)
+         # "Дзеркало" коду (щоб бачити зміни без перезапуску)
     environment:
-      # Зверни увагу: host тут 'db', як назва сервісу вище!
+      # Зверни у Error response from daemon: invalid volume вагу: host тут 'db', як назва сервісу вище!
       SQLALCHEMY_DATABASE_URL: postgresql+asyncpg://postgres:password@db:5432/shop_db
     depends_on:
       - db                 # Чекаємо запуску бази

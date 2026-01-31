@@ -1,15 +1,15 @@
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import FastAPI
 
 from fastapi.middleware.cors import CORSMiddleware
-from core import constants
 
-from routers import (
+from routers.routes import (
     auth,
     users,
     products,
     cart,
-    # categories,
     orders,
     payments,
     saller,
@@ -17,7 +17,11 @@ from routers import (
 )
 from db.database import Base, engine
 
-Base.metadata.create_all(bind=engine)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
 app = FastAPI(
     title="My E-commerce API",
     description="API магазинчику",
@@ -80,13 +84,6 @@ app.include_router(
     tags=["Admin"]
 )
 
-# 8. Constant
-
-app.include_router(
-    constants.router,
-    prefix="/constant",
-    tags=["Constants"]
-)
 
 # 9 Saller
 
@@ -100,7 +97,7 @@ app.include_router(
 
 # Простий рут для перевірки, чи сервер живий
 @app.get("/")
-def read_root():
+async def read_root():
     return {"message": "Welcome to the E-commerce API! Go to /docs for Swagger UI."}
 
 app.add_middleware(

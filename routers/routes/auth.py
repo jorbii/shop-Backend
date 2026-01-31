@@ -1,15 +1,20 @@
 from datetime import datetime, timedelta, timezone
-
 from fastapi import Depends, HTTPException, status, APIRouter
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.database import get_db
-from db.models import User, TokenBlackList, Cart
+from db.database import get_async_db
+from db.models import User, Cart
 from db.shemas import UserCreate, UserResponse, UserForgotPassword
 from core.config import settings
+from routers.repositories.dependencies import (
+    get_user_repository,
+    get_token_repository,
+    get_cart_repository
+)
+from routers.repositories import UserRepository, TokenRepository, CartRepository
 
 router = APIRouter(tags=["Auth"])
 
@@ -17,35 +22,34 @@ pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
-
-def hash_password(password: str):
+def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def verify_password(plain_password, hashed_password):
+def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_token(data: dict, expires_delta: timedelta, token_type: str):
+def create_token(data: dict, expires_delta: timedelta, token_type: str) -> str:
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + expires_delta
     to_encode.update({"exp": expire, "type": token_type})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def get_current_user(
-        token: str = Depends(oauth2_scheme),
-        db: Session = Depends(get_db)
-):
-
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    token_repo: TokenRepository = Depends(get_token_repository),
+    user_repo: UserRepository = Depends(get_user_repository)
+) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    check_token = db.query(TokenBlackList).filter(TokenBlackList.token == token).first()
-    if check_token:
+    # Перевірка чи токен в чорному списку
+    if await token_repo.is_blacklisted(token):
         raise credentials_exception
 
     try:
@@ -56,7 +60,7 @@ def get_current_user(
         if sub is None or token_type != "access":
             raise credentials_exception
 
-        user = db.query(User).filter(User.login == sub).first()
+        user = await user_repo.get_by_login(sub)
         if user is None:
             raise credentials_exception
 
@@ -67,17 +71,23 @@ def get_current_user(
 
 
 @router.post('/register', response_model=UserResponse)
-def register(user_data: UserCreate, db: Session = Depends(get_db)):
-
-    if db.query(User).filter(User.email == user_data.email).first():
+async def register(
+    user_data: UserCreate,
+    user_repo: UserRepository = Depends(get_user_repository),
+    cart_repo: CartRepository = Depends(get_cart_repository)
+):
+    """Реєстрація нового користувача"""
+    # Перевірка на існуючий email
+    if await user_repo.get_by_email(user_data.email):
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    if db.query(User).filter(User.login == user_data.login).first():
+    # Перевірка на існуючий login
+    if await user_repo.get_by_login(user_data.login):
         raise HTTPException(status_code=400, detail="Login already taken")
 
+    # Створення користувача
     hashed = hash_password(user_data.password)
-
-    new_user = User(
+    new_user = await user_repo.create(
         email=user_data.email,
         password=hashed,
         login=user_data.login,
@@ -85,26 +95,24 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         last_name=user_data.last_name,
         phone_number=user_data.phone_number
     )
+    await user_repo.db.flush()
 
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-
-    cart = Cart(
-        user_id=new_user.id,
-    )
-
-    db.add(cart)
-    db.commit()
+    # Створення кошика для користувача
+    await cart_repo.create(new_user.id)
+    await user_repo.db.commit()
+    await user_repo.db.refresh(new_user)
 
     return new_user
 
 
 @router.post('/login')
-def login(user_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.login == user_data.username).first()
+async def login(
+    user_data: OAuth2PasswordRequestForm = Depends(),
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """Вхід користувача"""
+    user = await user_repo.get_by_login(user_data.username)
 
-    # 2. Перевірка пароля
     if not user or not verify_password(user_data.password, user.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -122,9 +130,8 @@ def login(user_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_TIME),
         token_type="refresh"
     )
-    #
-    # db.add(refresh_token)
-    db.commit()
+
+    await user_repo.db.commit()
 
     return {
         "access_token": access_token,
@@ -132,12 +139,15 @@ def login(user_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         "token_type": "bearer"
     }
 
-@router.post('/logout')
-def logout( token: str = Depends(oauth2_scheme),
-            db: Session = Depends(get_db),
-            current_user: User = Depends(get_current_user)
-):
 
+@router.post('/logout')
+async def logout(
+    token: str = Depends(oauth2_scheme),
+    current_user: User = Depends(get_current_user),
+    user_repo: UserRepository = Depends(get_user_repository),
+    token_repo: TokenRepository = Depends(get_token_repository)
+):
+    """Вихід користувача"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -145,29 +155,29 @@ def logout( token: str = Depends(oauth2_scheme),
     )
 
     try:
-        db.refresh(current_user)
-
+        await user_repo.db.refresh(current_user)
         current_user.last_logout_at = datetime.now(timezone.utc)
 
-        check_token = db.query(TokenBlackList).filter(TokenBlackList.token == token).first()
-
-        if check_token:
+        # Перевірка чи токен вже в чорному списку
+        if await token_repo.is_blacklisted(token):
             raise credentials_exception
 
-        new_blacklisted_token = TokenBlackList(
-            token = token
-        )
-        db.add(new_blacklisted_token)
-        db.commit()
+        # Додаємо токен до чорного списку
+        await token_repo.add_to_blacklist(token)
+        await token_repo.db.commit()
 
-        return f"Logout successfully"
+        return "Logout successfully"
 
     except Exception as e:
         return f"Error {e}"
 
 
 @router.post("/refresh")
-def refresh_token_endpoint(refresh_token: str, db: Session = Depends(get_db)):
+async def refresh_token_endpoint(
+    refresh_token: str,
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """Оновити access token"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -184,7 +194,7 @@ def refresh_token_endpoint(refresh_token: str, db: Session = Depends(get_db)):
     except JWTError:
         raise credentials_exception
 
-    user = db.query(User).filter(User.login == sub).first()
+    user = await user_repo.get_by_login(sub)
     if user is None:
         raise credentials_exception
 
@@ -207,20 +217,25 @@ def refresh_token_endpoint(refresh_token: str, db: Session = Depends(get_db)):
 
 
 @router.post('/change-password')
-def change_password(
-        new_password: str,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+async def change_password(
+    new_password: str,
+    current_user: User = Depends(get_current_user),
+    user_repo: UserRepository = Depends(get_user_repository)
 ):
+    """Змінити пароль"""
     current_user.password = hash_password(new_password)
-    db.add(current_user)
-    db.commit()
+    await user_repo.update(current_user, password=current_user.password)
+    await user_repo.db.commit()
     return {"message": "Password updated successfully"}
 
 
 @router.post('/forgot-password')
-def forgot_password(user_email: UserForgotPassword, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.email == user_email.email).first()
+async def forgot_password(
+    user_email: UserForgotPassword,
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """Забули пароль"""
+    db_user = await user_repo.get_by_email(user_email.email)
 
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
